@@ -2,7 +2,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "orion-desktop",
   "version": "0.1.0",
-  "identifier": "com.tauri.dev",
+  "identifier": "com.orion.dev",
   "build": {
     "frontendDist": "../out",
     "devUrl": "http://localhost:3000",
