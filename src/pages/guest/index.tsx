@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import Image from "next/image";
 import Peer from "peerjs";
 import { useEffect, useRef, useState } from "react";
 
@@ -12,8 +13,9 @@ export default function Home() {
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const peerRef = useRef<Peer | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
 
-  const joinCall = (callId: string, from: string) => {
+  const placeCall = () => {
     navigator.mediaDevices
       .getUserMedia({ video: true, audio: true })
       .then((stream) => {
@@ -21,26 +23,15 @@ export default function Home() {
           localVideoRef.current.srcObject = stream;
           localVideoRef.current.play();
         }
-        const call = peerRef.current?.call(from, stream);
-        call?.on('stream', (remoteStream: any) => {
-          if (remoteVideoRef.current) {
-            remoteVideoRef.current.srcObject = remoteStream;
-            remoteVideoRef.current.play();
-          }
-        });
-
-        wsRef.current?.send(JSON.stringify({ type: 'joinCall', from: peerId, callId }));
-        setCurrentCallId(callId);
         setConnected(true);
+
+        // Notify the server about the new call
+        const callId = `${peerId}-${Date.now()}`;
+        wsRef.current?.send(JSON.stringify({ type: 'call', from: peerId, callId }));
+        setCurrentCallId(callId);
+        setLoading(true);
       })
       .catch(console.error);
-  };
-
-  const endCall = () => {
-    if (currentCallId) {
-      wsRef.current?.send(JSON.stringify({ type: 'endCall', callId: currentCallId }));
-      resetCallState();
-    }
   };
 
   const resetCallState = () => {
@@ -90,6 +81,9 @@ export default function Home() {
           setActiveCalls(data.activeCalls);
         } else if (data.type === 'callEnded') {
           resetCallState();
+        } else if (data.type === 'joinCall') {
+          console.log('Host Joined Call', data);
+          setLoading(false);
         }
       };
 
@@ -125,56 +119,57 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="flex flex-col min-h-screen bg-black">
-      <div className="w-full h-screen flex">
-        <div className="w-3/4 h-full relative">
-          {connected ? (
-            <>
-              <video ref={remoteVideoRef} className="w-full h-full bg-black object-cover" />
-            </>
-          ) : (
-            <div className="w-full h-full justify-center items-center flex">
-              <div className="w-64 border-2 border-dashed border-gray-600 rounded-md p-4 flex items-center justify-center">
-                <h1 className="text-gray-500 font-bold">Not In A Call</h1>
-              </div>
-            </div>
-          )}
+    <div className="flex flex-col h-screen overflow-hidden bg-black">
+      <div className="w-full h-full flex-col">
+        <div className="absolute w-full bg-black/80 border-b border-gray-600 flex justify-between p-4">
+          <Image
+            src="https://oliveliving.com/_nuxt/img/pinkinnerlogo.d6ddf2b.svg"
+            width={100}
+            height={50}
+            alt="Logo"
+          />
         </div>
-        <div className="w-1/4 h-full border-l-2 border-l-gray-600 flex flex-col space-y-4 p-4">
-          <div className="w-full flex justify-between items-center border-b-2 border-b-gray-600 pb-2">
-            <div>
-              <h1 className="text-lg font-bold">Active Calls</h1>
-            </div>
-            {connected && (
-              <button
-                onClick={endCall}
-                className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
-              >
-                End Call
-              </button>
-            )}
+        {loading && (
+          <div className="w-full h-full bg-black flex flex-col items-center justify-center">
+            <h1 className="text-white text-2xl font-bold">Please wait while the receptionist connects.</h1>
+            <h1 className="text-white text-2xl font-bold">
+              Thank you for your patience.
+            </h1>
           </div>
-          <ul>
-            {activeCalls.length > 0 ? activeCalls.map((call: any) => (
-              <li key={call.callId} className="flex justify-between items-center border-b-2 border-gray-600 pb-2">
-                <h1>{call.from}</h1>
-                <button
-                  onClick={() => joinCall(call.callId, call.from)}
-                  className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
-                >
-                  Join Call
-                </button>
-              </li>
-            )) : (
-              <div className="w-full border-2 border-dashed border-gray-600 rounded-md p-4 justify-center items-center flex">
-                <h1 className="text-gray-500 font-bold">No Calls Pending</h1>
-              </div>
-            )}
-          </ul>
-        </div>
+        )}
       </div>
-
-
-    </div>
+      {
+        !connected && (
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 p-4 rounded-md border border-gray-600 flex flex-col items-center space-y-4">
+            <div>
+              <h1 className="font-bold text-2xl">Meet Your Virtual Receptionist!</h1>
+            </div>
+            <div>
+              <Image
+                src="/images/virtualReceptionist.png"
+                width={200}
+                height={200}
+                alt="Virtual Receptionist"
+              />
+            </div>
+            <button
+              onClick={placeCall}
+              disabled={connected}
+              className="w-full bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 z-50 duration-500"
+            >
+              Start a Call
+            </button>
+          </div>
+        )
+      }
+      {
+        connected && !loading && (
+          <>
+            <video ref={localVideoRef} className="w-64 h-64 bg-black absolute rounded-full shadow-2xl bottom-4 right-4 object-cover z-50" muted />
+            <video ref={remoteVideoRef} className="w-full h-full bg-black object-cover" />
+          </>
+        )
+      }
+    </div >
   );
 }
